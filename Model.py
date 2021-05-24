@@ -14,7 +14,6 @@ from sklearn.metrics import roc_auc_score
 import warnings
 warnings.filterwarnings("ignore")
 
-
 class Model:
     def __init__(self):        
         self.model = None
@@ -113,15 +112,7 @@ class Model:
     
     def train_test_split_(self, X, y, test_size, X_ss=None, y_ss=None, random_state=42):
         if (X_ss is not None):
-            X_ss['ss'] = 1
-            y_ss = y_ss.to_frame()
-            y_ss['ss'] = 1
-            
-            X['ss'] = 0
-            y['ss'] = 0
-            
-            X_ss_full = pd.concat([X, X_ss]).sample(frac=1, random_state=random_state)
-            y_ss_full = pd.concat([y, y_ss]).sample(frac=1, random_state=random_state)
+            X_ss_full, y_ss_full = self.label_shuffle(X, y, X_ss, y_ss, random_state = random_state)
             
             len_train = len(X_ss_full) - round(len(X_ss_full) * test_size)
             
@@ -162,7 +153,69 @@ class Model:
         
         return self.estimate(X_test, y_test)
     
-    def fit_ss(self, X, y, numeric_features, categorial_features, X_ss, y_ss):
+    def label_shuffle(self, X, y, X_ss, y_ss, random_state=42):
+        X_ss['ss'] = 1
+        y_ss = y_ss.to_frame()
+        y_ss['ss'] = 1
+
+        X['ss'] = 0
+        y['ss'] = 0
+
+        X_ss_full = pd.concat([X, X_ss]).sample(frac=1, random_state=random_state)
+        y_ss_full = pd.concat([y, y_ss]).sample(frac=1, random_state=random_state)
+        
+        return (X_ss_full, y_ss_full)
+    
+    def train_cross_validation(self, X, y, k, categorical_features, X_ss=None, y_ss=None, random_state=42):
+        chunk_size = len(X) / k
+        chunks_size = [(i*chunk_size, i*chunk_size + chunk_size) for i in range(k)]
+        
+        result_score = []
+        
+        print(f"Part size: {chunk_size}")
+        
+        if (X_ss is not None):
+            X_ss_full, y_ss_full = self.label_shuffle(X, y, X_ss, y_ss, random_state = random_state)
+            
+            for chunkIndex in range(len(chunks_size)):
+                x_test = X_ss_full[int(chunks_size[chunkIndex][0]) : int(chunks_size[chunkIndex][1])]
+                y_test = y_ss_full[int(chunks_size[chunkIndex][0]) : int(chunks_size[chunkIndex][1])]
+                
+                x_train = X_ss_full.drop(x_test.index, axis = 0)
+                y_train = y_ss_full.drop(y_test.index, axis = 0)
+                
+                x_test = x_test[x_test.ss == 0]
+                y_test = y_test[y_test.ss == 0]
+                
+                x_train.drop('ss', axis = 1, inplace = True)
+                y_train.drop('ss', axis = 1, inplace = True)
+                x_test.drop('ss', axis = 1, inplace = True)
+                y_test.drop('ss', axis = 1, inplace = True)
+                
+                score = self.train(x_train, x_test, y_train, y_test, categorical_features)
+                
+                print(f"Chunk {chunkIndex}; Score: {score}")
+                
+                result_score.append((chunks_size[chunkIndex], score))
+        else:            
+            for chunkIndex in range(len(chunks_size)):
+                x_test = X[int(chunks_size[chunkIndex][0]) : int(chunks_size[chunkIndex][1])]
+                y_test = y[int(chunks_size[chunkIndex][0]) : int(chunks_size[chunkIndex][1])]
+                
+                x_train = X.drop(x_test.index, axis = 0)
+                y_train = y.drop(y_test.index, axis = 0)
+                
+                score = self.train(x_train, x_test, y_train, y_test, categorical_features)
+                
+                print(f"Chunk {chunkIndex}; Score: {score}")
+                
+                result_score.append((chunks_size[chunkIndex], score))
+            
+        print(f"Mean score: {sum(list(map(lambda x: x[1], result_score))) / k}")
+        
+        return result_score
+    
+    def fit_ss(self, X, y, numeric_features, categorial_features, X_ss, y_ss, cross_validation=False):
         self.counter_words = {}
         
         X_ = X
@@ -173,11 +226,14 @@ class Model:
         
         X_ss = self.add_features(X_ss)[numeric_features + categorical_features]
         
-        X_train, X_test, y_train, y_test = self.train_test_split_(X_, y_, test_size=0.2, X_ss=X_ss, y_ss=y_ss, random_state=42)
+        if (not cross_validation):
+            X_train, X_test, y_train, y_test = self.train_test_split_(X_, y_, test_size=0.2, X_ss=X_ss, y_ss=y_ss, random_state=42)
+            return self.train(X_train, X_test, y_train, y_test, categorical_features)
+        else:
+            return self.train_cross_validation(X_, y_, 5, categorical_features, X_ss=X_ss, y_ss=y_ss, random_state=42)
         
-        return self.train(X_train, X_test, y_train, y_test, categorical_features)
-    
-    def fit(self, X, y, numeric_features, categorial_features):
+        
+    def fit(self, X, y, numeric_features, categorial_features, cross_validation=False):
         self.counter_words = {}
         
         X_ = X
@@ -186,9 +242,12 @@ class Model:
         self.NLP_preprocess(X_, y_)
         X_ = self.add_features(X_)[numeric_features + categorical_features]
 
-        X_train, X_test, y_train, y_test = self.train_test_split_(X_, y_, test_size=0.2, random_state=42)
-
-        return self.train(X_train, X_test, y_train, y_test, categorical_features)
+        if (not cross_validation):
+            X_train, X_test, y_train, y_test = self.train_test_split_(X_, y_, test_size=0.2, random_state=42)
+            return self.train(X_train, X_test, y_train, y_test, categorical_features)
+        else:
+            return self.train_cross_validation(X_, y_, 5, categorical_features, random_state=42)
+        
     
     def predict_proba(self, X, add_feat=True):
         if (add_feat): X = self.add_features(X)
