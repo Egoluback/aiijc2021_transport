@@ -18,6 +18,32 @@ from sklearn.metrics import roc_auc_score
 import warnings
 warnings.filterwarnings("ignore")
 
+import datetime 
+from math import cos, asin, sqrt, pi
+
+# Haversine formula for calculating distances between two points
+def get_distance(lat1, lon1, lat2, lon2):
+    r = 6371
+    phi1 = np.radians(lat1)
+    phi2 = np.radians(lat2)
+    delta_phi = np.radians(lat2 - lat1)
+    delta_lambda = np.radians(lon2 - lon1)
+    a = np.sin(delta_phi / 2)**2 + np.cos(phi1) * np.cos(phi2) *   np.sin(delta_lambda / 2)**2
+    res = r * (2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a)))
+    return np.round(res, 4)
+    
+
+def get_speed(lat1, lon1, lat2, lon2, dt1: str, dt2: str) -> float:
+    distance = get_distance(lat1, lon1, lat2, lon2).tolist()
+    format = "%Y-%m-%d %H:%M:%S"
+    dt1=datetime.datetime.strptime(dt1, format)
+    dt2=datetime.datetime.strptime(dt2, format)
+    time = (dt2-dt1).total_seconds()/3600 # convert timedelta into hours
+    if time==0:
+        return 0
+    return distance/time
+
+
 class Model:
     def __init__(self):        
         self.model = None
@@ -116,6 +142,13 @@ class Model:
         X['distance_thresh'] = ((X.distance > 5) & (X.distance < 20)).astype(int)
         
         return X
+    
+    def gen_speed(self, tracks):
+        tracks['speed'] = np.zeros(tracks.shape[0])
+        for i in tqdm(range(1, len(tracks))):
+            tracks.iloc[i, tracks.columns.get_loc('speed')] = get_speed(tracks.iloc[i-1, tracks.columns.get_loc('lat_')], tracks.iloc[i-1, tracks.columns.get_loc('lon_')],
+                                        tracks.iloc[i, tracks.columns.get_loc('lat_')], tracks.iloc[i, tracks.columns.get_loc('lon_')], tracks.iloc[i-1, tracks.columns.get_loc('dt')], tracks.iloc[i, tracks.columns.get_loc('dt')])
+        return tracks
     
     def estimate(self, X, y):
         return roc_auc_score(y, self.predict_proba(X, add_feat=False))
@@ -266,20 +299,29 @@ class Model:
         self.model_rocket = MiniRocket()
         self.model_rocket.fit(X, y)
 
-        print("MiniRocket Transforming...")
+        print("MiniRocket transforming...")
         X_train_transform = self.model_rocket.transform(X, y)
 
         print("Training logistic regression...")
-        self.model_tracks = RidgeClassifierCV(normalize = True)
+        # self.model_tracks = RidgeClassifierCV(normalize = True)
+        self.model_tracks = RidgeClassifier(normalize = True, random_state=RANDOM_STATE)
         self.model_tracks.fit(X_train_transform, y)
-        
-        print(f"Score: {self.model_tracks.score(X_train_transform, y)}")
+
+        print(y.sum(), self.model_tracks.predict(X_train_transform).sum())
+
+        # print(f"Score: {self.model_tracks.score(X_train_transform, y)}")
+        print(f"Roc AUC score: {roc_auc_score(y, self.model_tracks.predict(X_train_transform))}")
     
-    def predict_tracks(self, tracks):
+    def predict_tracks(self, tracks, gen_speed=True, drop_duplicates=True):
         print("Preprocessing tracks data...")
-        X = self.tracks_preprocess(tracks, self.TRACKS_CHUNK_SIZE, self.TRACKS_MULTIPLIER, labled=False)
+        X = tracks.copy()
+        if gen_speed:
+            print(" Generating speed...")
+            X = self.gen_speed(X)
+        print(" Converting time series...")
+        X = self.tracks_preprocess(X, self.TRACKS_CHUNK_SIZE, self.TRACKS_MULTIPLIER, labled=False, drop_duplicates=drop_duplicates)
         
-        print("MiniRocket Transforming...")
+        print("MiniRocket transforming...")
         X_transform = self.model_rocket.transform(X)
 
         return self.model_tracks.predict(X_transform)
@@ -332,13 +374,15 @@ class Model:
         return np.array(result)
 
     # make df, so that each row has whole order speeds time series
-    def make_nested(self, tracks, chunk_size, multiplier, labled):
-        unique_orders = tracks.drop_duplicates('order_id', keep='last')
+    def make_nested(self, tracks, chunk_size, multiplier, labled, drop_duplicates):
+        orders = tracks.copy()
+        if drop_duplicates:
+            orders = tracks.drop_duplicates('order_id', keep='last')
         if labled:
-            unique_orders = self.undersampling(unique_orders, multiplier)
+            orders = self.undersampling(orders, multiplier)
         y_labels = []
         X_train = []
-        for order in tqdm(unique_orders['order_id']):
+        for order in tqdm(orders['order_id']):
             order_df = tracks[tracks.order_id == order]
             order_df.loc[0, 'speed'] = 0
 
@@ -357,8 +401,8 @@ class Model:
                 X_train.append(pd.Series(speed_series))
         return X_train, y_labels
     
-    def tracks_preprocess(self, tracks, chunk_size, multiplier, labled=True):
-        X_train, train_labels = self.make_nested(tracks, chunk_size, multiplier, labled)
+    def tracks_preprocess(self, tracks, chunk_size, multiplier, labled=True, drop_duplicates=True):
+        X_train, train_labels = self.make_nested(tracks, chunk_size, multiplier, labled, drop_duplicates)
 
         X_train = pd.DataFrame({'speed': X_train})
         if not labled: return X_train
