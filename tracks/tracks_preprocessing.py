@@ -22,6 +22,14 @@ class Tracks_preprocessing():
         self.X = extracted_features
         self.y = y
 
+    def _extract_features_unlabeled(self, tracks: pd.DataFrame):
+
+        extracted_features = extract_features(tracks,column_id='order_id', column_sort="dt")
+        extracted_features = extracted_features[[self.relevant_features]]
+        self.X = extracted_features
+
+        return extracted_features
+
     def speed_limits_features(self,data, features_path='./data/speed_limits_features.csv'):
         tracks = data.copy()
         if exists(features_path):
@@ -66,7 +74,6 @@ class Tracks_preprocessing():
                 features = pd.read_csv(self.features_path)
                 self.X.merge(features, left_index=True,
                              how='left', right_index=True)
-                print(self.X.head())
             return self.X, self.y
 
         y = tracks[['order_id', 'is_aggressive']
@@ -80,18 +87,31 @@ class Tracks_preprocessing():
         X_train.loc[0, 'speed'] = 0.0
 
         self._extract_features(X_train, y)
-        self.X.merge(features,left_index=True, how='left', right_index=True)
+        self.X.merge(features,on='order_id')
 
         if exists(self.features_path):
             features = pd.read_csv(self.features_path)
             self.X.merge(features, left_index=True, how='left')
-            print(self.X.head())
 
         with open('./data/with_features_x.pkl', 'wb') as file, open('./data/with_features_y.pkl', 'wb') as y_file:
             pickle.dump(self.X, file)
             pickle.dump(self.y, y_file)
 
         return self.X, self.y
+    
+    def preprocess_unlabeled(self, tracks: pd.DataFrame) -> pd.DataFrame:
+        features = self.speed_limits_features(tracks, self.features_path)
+
+        X_train = tracks.drop(
+            ['Unnamed: 0.1', 'driver_id', 'lat_', 'lon_'], axis=1)
+        X_train.loc[0, 'speed'] = 0.0
+
+        self._extract_features_unlabeled(X_train)
+        self.X.merge(features,left_index=True, how='left', right_index=True)
+
+        return self.X
+
+        
 
 
 if __name__ == '__main__':

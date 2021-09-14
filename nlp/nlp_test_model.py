@@ -1,3 +1,22 @@
+# To add a new cell, type '# %%'
+# To add a new markdown cell, type '# %% [markdown]'
+# %%
+from IPython import get_ipython
+
+# %% [markdown]
+# ### **Импорт библиотек**
+
+# %%
+
+
+# %%
+get_ipython().system('pip install catboost')
+get_ipython().system('pip install tqdm')
+get_ipython().system('pip install pymorphy2[fast]')
+get_ipython().system('pip install fasttext')
+
+
+# %%
 import numpy as np
 import pandas as pd
 import re
@@ -35,15 +54,40 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 nltk.download('stopwords')
 
+# %% [markdown]
+# ### **Считываем и смотрим на данные**
+
+# %%
+labled_train_data = pd.read_csv('data/base_files/labled_train_data.csv', comment='#', sep='\t').drop('Unnamed: 0', axis=1)
+labled_train_comments = pd.read_csv('data/base_files/labled_train_comments.csv', comment='#', sep='\t').drop('Unnamed: 0', axis=1)
+unlabled_train_comments = pd.read_csv('data/base_files/unlabled_train_comments.csv', comment='#', sep='\t').drop('Unnamed: 0', axis=1)
+#labled_train_speed = pd.read_csv('/content/drive/MyDrive/labled_train_tracks_speed.csv', comment='#', sep=',')
+#labled_train_tracks = pd.read_csv('/content/drive/MyDrive/labled_train_tracks.csv', comment='#', sep='\t').drop('Unnamed: 0', axis=1)
+#
+#unlabled_train_tracks = pd.read_csv('/content/drive/MyDrive/unlabled_train_tracks.csv', comment='#', sep='\t').drop('Unnamed: 0', axis=1)
 
 
-class Model:
+# %%
+labled_train_comments = pd.concat([labled_train_comments, unlabled_train_comments], ignore_index=True)
+X, y = labled_train_data[labled_train_data.columns[:-1]], labled_train_data['is_aggressive']
+
+
+# %%
+
+# %% [markdown]
+# ### **Тест**
+
+# %%
+class Model_test:
   def __init__(self):
     self.model = None
-    self.cars_vectorizer = Doc2Vec(min_count=1, vector_size=8, window=2, workers=-1, seed=42)
+    self.clustering_model = KMeans(n_clusters=3, random_state=42, n_init=50, max_iter=300)
+    self.spectral_clusterer = SpectralClustering(assign_labels='discretize', n_clusters=3,
+    random_state=42)
+    self.cars_vectorizer = Doc2Vec(min_count=1, vector_size=8, window=2, workers=-1, seed=42, negative=0)
     self.comm_model = LogisticRegression(random_state=42, max_iter=1000)
-    self.cars_clusterer = KMeans(n_clusters=4, random_state=42, n_init=50, max_iter=300)
-    self.text_vectorizer = Doc2Vec(min_count=1, vector_size=30, window=5, workers=-1, seed=42)
+    self.cars_clusterer = KMeans(n_clusters=3, random_state=42, n_init=50, max_iter=300)
+    self.text_vectorizer = Doc2Vec(min_count=1, vector_size=30, window=5, workers=-1, seed=42, negative=3)
     
     self.standart_comments = ['Больше нечего сказать'.lower(), 'Да'.lower(), 'Ок'.lower()]
     self.aggressive_words = {'verb': set(), 'adj': set(), 'all_words': set(), 'noun': set()}
@@ -65,8 +109,9 @@ class Model:
 
   def train_doc2vec_model(self, X, y, comm_dataset=None):
     print('training vectorizer model...')
-    dataset = X.join(y, on='order_id', lsuffix='_caller', rsuffix='_other').copy()
+    dataset = X.join(y).copy()
     dataset = dataset.fillna({'comment': self.standart_comments[0]})
+    # dataset = dataset.loc[dataset['is_aggressive'] == 1]
     data = []
     tag_n = 0
     for row in dataset.itertuples(): # перебираем все строки в датасете
@@ -95,7 +140,7 @@ class Model:
   # тренировка векторизатора машин
   def train_cars_vectorizer_and_clusterer(self, X, y):
       print('training vectorizer model...')
-      dataset = X.join(y, on='order_id', lsuffix='_caller', rsuffix='_other').copy()
+      dataset = X.join(y).copy()
       data = []
       tag_n = 0
       for row in dataset.itertuples(): # перебираем все строки в датасете
@@ -125,8 +170,24 @@ class Model:
       self.cars_clusterer.fit(vectors)
       print('CARS CLUSTERING COMPLETED')
 
+  # генерация фич из кластеров
+  def cluster_features(self, text):
+    similarity = []
+    clusters = self.clustering_model.cluster_centers_
+    prep_text = [self.word_preprocess(word, word_normal_form=True)[0] for word in text.split(" ") if self.word_preprocess(word, word_normal_form=True)[0] not in self.stop_words]
+    prep_text = [word for word in text if word != '']
+    if len(prep_text) == 0 or text.lower().strip() in self.standart_comments:
+      for i in range(len(clusters)):
+        similarity.append([0, len(clusters)])
+      return similarity
+
+    vector = self.text_vectorizer.infer_vector(prep_text)
+    for i in range(len(clusters)):
+      similarity.append([cosine(vector, clusters[i]), self.clustering_model.predict([vector])[0]])
+    return similarity
+
   def train_comm_model(self, X, y):
-    dataset = X.join(y, on='order_id', lsuffix='_caller', rsuffix='_other').copy()
+    dataset = X.join(y).copy()
     dataset = dataset.fillna({'comment': self.standart_comments[0]})
     vectors = []
     c = 0
@@ -138,8 +199,9 @@ class Model:
       if len(comment) > 0 and getattr(row, 'comment').lower().strip() not in self.standart_comments:
         vectors.append(self.text_vectorizer.infer_vector(comment))
         train_y.append(getattr(row, 'is_aggressive'))
+    self.clustering_model.fit(vectors)
+    print('CLUSTERING COMPLETED')
     self.comm_model.fit(vectors, train_y)
-    print('COMM MODEL TRAINED')
 
   # средний рейтинг по комментариям для каждого водителя  (плохо работает, хз че с ними делать), не юзать пока
   def mean_comments_aggressive_rate(self, comm_dataset, X):
@@ -163,7 +225,7 @@ class Model:
 
   # заполнение словаря агрессивными словами
   def fill_agressive_vocab(self, X, y):
-    dataset = X.join(y, on='order_id', lsuffix='_caller', rsuffix='_other').copy()
+    dataset = X.join(y).copy()
     for row in dataset.itertuples(): # перебираем все строки в датасете
       if getattr(row, 'is_aggressive') == 1 and getattr(row, 'comment') and getattr(row, 'comment').lower().strip() not in self.standart_comments:
         words = [self.word_preprocess(word, word_normal_form=True) for word in getattr(row, 'comment').split(' ')]
@@ -240,7 +302,30 @@ class Model:
        car = [word for word in car if word != '']
        cars_cluster.append(self.cars_clusterer.predict([self.cars_vectorizer.infer_vector(car)])[0])
     data['cars_cluster'] = cars_cluster
-    #feature_list.append('cars_cluster')
+    feature_list.append('cars_cluster')
+
+    # vectors = []
+    # for row in data.itertuples(): # перебираем все строки в датасете
+    #   comment = getattr(row, 'comment')
+    #   comment = [self.word_preprocess(word, word_normal_form=True)[0] for word in comment.split(" ") if self.word_preprocess(word, word_normal_form=True)[0] not in self.stop_words]
+    #   comment = [word for word in comment if word != '']
+    #   if len(comment) == 0:
+    #     comment = [self.word_preprocess(word, word_normal_form=True)[0] for word in self.standart_comments[0].split(" ") if self.word_preprocess(word, word_normal_form=True)[0] not in self.stop_words]
+    #   vectors.append(self.text_vectorizer.infer_vector(comment))
+    # data['spectral_clusters'] = self.spectral_clustering(vectors)
+    # feature_list.append('spectral_clusters')
+
+    # similarities = []
+    # for row in data.itertuples(): # перебираем все строки в датасете
+    #   comment = getattr(row, 'comment')
+    #   similarities.append(self.cluster_features(comment))
+
+
+    # for cluster in range(len(self.clustering_model.cluster_centers_)):
+    #   data[f"euclidean_cluster_{cluster}"] = [similarities[i][cluster][0] for i in range(len(similarities))]
+    #   feature_list.append(f"euclidean_cluster_{cluster}")
+    # data['cluster'] = [similarities[i][0][1] for i in range(len(similarities))]
+    # feature_list.append('cluster')
 
     data['is_comment'] = [1 if getattr(row, 'comment') and getattr(row, 'comment').lower().strip() not in self.standart_comments else 0 for row in data.itertuples()]
     feature_list.append('is_comment')
@@ -254,9 +339,10 @@ class Model:
 
   # кросс-валидация и предикт на тесте
   def train_eval(self, X, y, comm_dataset_labled=None, comm_dataset_unlabled=None):
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+    #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+    X_train, y_train = X, y
     X_train = X_train.fillna({'comment': self.standart_comments[0]})
-    X_test = X_test.fillna({'comment': self.standart_comments[0]})
+    #X_test = X_test.fillna({'comment': self.standart_comments[0]})
 
     self.fill_agressive_vocab(X_train, y_train) # заполнение словаря агрессивных слов
     self.train_doc2vec_model(X_train, y_train, comm_dataset_labled) # тренировка doc2vec модели и кластеризации для комментариев о поездке
@@ -267,13 +353,13 @@ class Model:
 
     self.model = LogisticRegression(random_state=42, max_iter=1000)
 
-    cv_score = cross_val_score(self.model, X_train_features, y_train, cv=5, scoring='roc_auc')
+    #cv_score = cross_val_score(self.model, X_train_features, y_train, cv=5, scoring='roc_auc')
     
     self.model.fit(X_train_features, y_train)
 
-    print('Test Roc-Auc score:', roc_auc_score(y_test, self.model.predict_proba(self.features(X_test, comm_dataset_labled))[:, 1]))
+    #print('Test Roc-Auc score:', roc_auc_score(y_test, self.model.predict_proba(self.features(X_test, comm_dataset_labled))[:, 1]))
     print('Train Roc-Auc score:', roc_auc_score(y_train, self.model.predict_proba(X_train_features)[:, 1]))
-    print(f"CV_mean roc_auc: {np.mean(cv_score)}, CV_folds_score: {cv_score}")
+    #print(f"CV_mean roc_auc: {np.mean(cv_score)}, CV_folds_score: {cv_score}")
     return X_train_features
   
   def predict(self, X, comm_dataset=None):
@@ -284,9 +370,10 @@ class Model:
     datasss.to_csv('resss.csv')
     print('prediction saved')
 
-def get_model(X:pd.DataFrame,y:pd.DataFrame, comments:pd.DataFrame):
-    model = Model()
-    
-    features = model.train_eval(X, y, comm_dataset_labled=comments)
-    return model,features
+
+# %%
+def get_model():
+  model_test = Model_test()
+  features = model_test.train_eval(X, y, comm_dataset_labled=None)
+  return model_test
 
