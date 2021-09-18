@@ -15,20 +15,21 @@ class Tracks_preprocessing():
         self.features_path: str = features_path
         self.road_info_path = './data/road_info.csv'
 
-    def _extract_features(self, tracks: pd.DataFrame, y: np.array):
+    def extract_features(self, tracks: pd.DataFrame, y: np.array):
         extracted_features = extract_relevant_features(
             tracks, y, column_id="order_id", column_sort="dt")
-        self.relevant_features=extracted_features.columns
+        self.relevant_features = extracted_features.columns
+        print("TRACKS FEATURES")
+        print(self.relevant_features)
         self.X = extracted_features
         self.y = y
 
-    def _extract_features_unlabeled(self, tracks: pd.DataFrame):
+    def _extract_features_unlabeled(self, tracks: pd.DataFrame, relevant_features):
 
         extracted_features = extract_features(tracks,column_id='order_id', column_sort="dt")
-        extracted_features = extracted_features[[self.relevant_features]]
+        extracted_features = extracted_features[relevant_features]
         self.X = extracted_features
 
-        return extracted_features
 
     def speed_limits_features(self,data, features_path='./data/speed_limits_features.csv'):
         tracks = data.copy()
@@ -64,12 +65,12 @@ class Tracks_preprocessing():
         features = pd.DataFrame({'violations':count_violations, 'near_violations': count_near_violations})
         return features
 
-    def preprocess(self, tracks: pd.DataFrame) -> Tuple[pd.DataFrame, np.array]:
+    def preprocess(self, tracks: pd.DataFrame) -> Tuple[pd.DataFrame, np.array, np.array]:
         if exists('./data/with_features_x.pkl'):
-            with open('./data/with_features_x.pkl', 'rb') as X_file, open('./data/with_features_y.pkl', 'rb') as y_file:
+            with open('./data/with_features_x.pkl', 'rb') as X_file, open('./data/with_features_y.pkl', 'rb') as y_file, open('./data/relevant_features.pkl', 'rb') as c_file:
                 self.X: pd.DataFrame = pickle.load(X_file)
                 self.y: pd.DataFrame = pickle.load(y_file)
-
+                self.relevant_features = pickle.load(c_file)
             if exists(self.features_path):
                 features = pd.read_csv(self.features_path)
                 self.X.merge(features, left_index=True,
@@ -86,27 +87,29 @@ class Tracks_preprocessing():
             ['Unnamed: 0.1', 'driver_id', 'lat_', 'lon_', 'is_aggressive'], axis=1)
         X_train.loc[0, 'speed'] = 0.0
 
-        self._extract_features(X_train, y)
-        self.X.merge(features,on='order_id')
+        self.extract_features(X_train, y)
+        self.X.merge(features,left_index = True, right_index = True)
 
         if exists(self.features_path):
             features = pd.read_csv(self.features_path)
-            self.X.merge(features, left_index=True, how='left')
+            self.X.merge(features, left_index=True, right_index =True, how='left')
 
-        with open('./data/with_features_x.pkl', 'wb') as file, open('./data/with_features_y.pkl', 'wb') as y_file:
+        with open('./data/with_features_x.pkl', 'wb') as file, open('./data/with_features_y.pkl', 'wb') as y_file, open('./data/relevant_features.pkl', 'wb') as c_file:
             pickle.dump(self.X, file)
             pickle.dump(self.y, y_file)
+            pickle.dump(self.relevant_features,c_file)
 
         return self.X, self.y
     
     def preprocess_unlabeled(self, tracks: pd.DataFrame) -> pd.DataFrame:
+        with open('./data/relevant_features.pkl', 'rb') as c_file:
+            relevant_features = pickle.load(c_file)
         features = self.speed_limits_features(tracks, self.features_path)
-
         X_train = tracks.drop(
             ['Unnamed: 0.1', 'driver_id', 'lat_', 'lon_'], axis=1)
         X_train.loc[0, 'speed'] = 0.0
 
-        self._extract_features_unlabeled(X_train)
+        self._extract_features_unlabeled(X_train,relevant_features)
         self.X.merge(features,left_index=True, how='left', right_index=True)
 
         return self.X
@@ -116,3 +119,5 @@ class Tracks_preprocessing():
 
 if __name__ == '__main__':
     preprocess = Tracks_preprocessing()
+    tracks = pd.read_csv('./data/labled_train_tracks_speed.csv')
+    x,y= preprocess.preprocess(tracks)

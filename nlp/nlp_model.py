@@ -249,31 +249,19 @@ class Model:
     for feature in feature_list:
       data = data.fillna({feature: data[feature].mean()})
     
+    data['order_id'] = X.index
     data = data.set_index('order_id')
     return data[feature_list]
 
   # кросс-валидация и предикт на тесте
   def train_eval(self, X, y, comm_dataset_labled=None, comm_dataset_unlabled=None):
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
-    X_train = X_train.fillna({'comment': self.standart_comments[0]})
-    X_test = X_test.fillna({'comment': self.standart_comments[0]})
 
-    self.fill_agressive_vocab(X_train, y_train) # заполнение словаря агрессивных слов
-    self.train_doc2vec_model(X_train, y_train, comm_dataset_labled) # тренировка doc2vec модели и кластеризации для комментариев о поездке
-    self.train_cars_vectorizer_and_clusterer(X_train, y_train) # тренировка doc2vec модели и кластеризации для машин
-    self.train_comm_model(X_train, y_train) # тренировка модели вероятностей агрессивности текстов
+    self.fill_agressive_vocab(X, y) # заполнение словаря агрессивных слов
+    self.train_doc2vec_model(X, y, comm_dataset_labled) # тренировка doc2vec модели и кластеризации для комментариев о поездке
+    self.train_cars_vectorizer_and_clusterer(X, y) # тренировка doc2vec модели и кластеризации для машин
+    self.train_comm_model(X, y) # тренировка модели вероятностей агрессивности текстов
 
-    X_train_features = self.features(X_train, comm_dataset_labled)
-
-    self.model = LogisticRegression(random_state=42, max_iter=1000)
-
-    cv_score = cross_val_score(self.model, X_train_features, y_train, cv=5, scoring='roc_auc')
-    
-    self.model.fit(X_train_features, y_train)
-
-    print('Test Roc-Auc score:', roc_auc_score(y_test, self.model.predict_proba(self.features(X_test, comm_dataset_labled))[:, 1]))
-    print('Train Roc-Auc score:', roc_auc_score(y_train, self.model.predict_proba(X_train_features)[:, 1]))
-    print(f"CV_mean roc_auc: {np.mean(cv_score)}, CV_folds_score: {cv_score}")
+    X_train_features = self.features(X, comm_dataset_labled)
     return X_train_features
   
   def predict(self, X, comm_dataset=None):
