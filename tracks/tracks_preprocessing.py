@@ -97,13 +97,13 @@ class Tracks_preprocessing():
         with open('./data/with_features_x.pkl', 'wb') as file, open('./data/with_features_y.pkl', 'wb') as y_file, open('./data/relevant_features.pkl', 'wb') as c_file:
             pickle.dump(self.X, file)
             pickle.dump(self.y, y_file)
-            pickle.dump(self.relevant_features,c_file)
+            pickle.dump(self.relevant_features.tolist(),c_file)
 
         return self.X, self.y
     
     def preprocess_unlabeled(self, tracks: pd.DataFrame) -> pd.DataFrame:
         with open('./data/relevant_features.pkl', 'rb') as c_file:
-            relevant_features = pickle.load(c_file)
+            relevant_features = np.array(pickle.load(c_file))
         features = self.speed_limits_features(tracks, self.features_path)
         X_train = tracks.drop(
             ['Unnamed: 0.1', 'driver_id', 'lat_', 'lon_'], axis=1)
