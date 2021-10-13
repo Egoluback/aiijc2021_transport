@@ -18,6 +18,7 @@ class Tracks_preprocessing():
     def extract_features(self, tracks: pd.DataFrame, y: np.array):
         extracted_features = extract_relevant_features(
             tracks, y, column_id="order_id", column_sort="dt")
+        extracted_features = extracted_features.iloc[:, 0:10] # get first 10 most relevant features
         self.relevant_features = extracted_features.columns
         print("TRACKS FEATURES")
         print(self.relevant_features)
@@ -73,8 +74,8 @@ class Tracks_preprocessing():
                 self.relevant_features = pickle.load(c_file)
             if exists(self.features_path):
                 features = pd.read_csv(self.features_path)
-                self.X.merge(features, left_index=True,
-                             how='left', right_index=True)
+                self.X = self.X.merge(features, left_index=True,
+                             how='left', right_index=True, )
             return self.X, self.y
 
         y = tracks[['order_id', 'is_aggressive']
