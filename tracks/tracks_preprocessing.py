@@ -18,7 +18,7 @@ class Tracks_preprocessing():
     def extract_features(self, tracks: pd.DataFrame, y: np.array):
         extracted_features = extract_relevant_features(
             tracks, y, column_id="order_id", column_sort="dt")
-        extracted_features = extracted_features.iloc[:, 0:10] # get first 10 most relevant features
+        extracted_features = extracted_features
         self.relevant_features = extracted_features.columns
         print("TRACKS FEATURES")
         print(self.relevant_features)
@@ -55,7 +55,7 @@ class Tracks_preprocessing():
         mxspeed = df.maxspeed.apply(lambda x: int(x) if type(x)==str and x.isdigit() else x)
         df.maxspeed =  mxspeed.apply(lambda x: dic[x.lower()] if type(x)==str else x)
         features=df.copy()
-        features['is_violation'] = np.where(features.speed>features.maxspeed, True, False)
+        features['is_violation'] = np.where(features.speed-features.maxspeed>3, True, False)
         features['near_violation'] = np.where((features.speed-features.maxspeed)<0.5, True, False)
 
         groupedby_order= features.groupby('order_id')
@@ -70,12 +70,18 @@ class Tracks_preprocessing():
         if exists('./data/with_features_x.pkl'):
             with open('./data/with_features_x.pkl', 'rb') as X_file, open('./data/with_features_y.pkl', 'rb') as y_file, open('./data/relevant_features.pkl', 'rb') as c_file:
                 self.X: pd.DataFrame = pickle.load(X_file)
+                with open('./log.txt', 'a')as log:
+                    log.write('\nTRACK PREPROCESSING\n')
+                    log.write(' '.join([str(column) for column in self.X.columns]))
                 self.y: pd.DataFrame = pickle.load(y_file)
                 self.relevant_features = pickle.load(c_file)
             if exists(self.features_path):
                 features = pd.read_csv(self.features_path)
                 self.X = self.X.merge(features, left_index=True,
-                             how='left', right_index=True, )
+                             how='left', right_index=True)
+                with open('./log.txt', 'a')as log:
+                    log.write('TRACK PREPROCESSING FEATURES')
+                    log.write(' '.join([str(column) for column in self.X.columns]))
             return self.X, self.y
 
         y = tracks[['order_id', 'is_aggressive']

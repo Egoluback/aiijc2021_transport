@@ -1,0 +1,80 @@
+speed__cid_ce__normalize_False
+ speed__number_cwt_peaks__n_5
+ speed__sum_values
+ speed__fft_coefficient__attr_"real"__coeff_0
+ speed__fft_aggregated__aggtype_"centroid"
+ speed__fft_coefficient__attr_"abs"__coeff_0
+ speed__number_peaks__n_1
+ speed__length
+ speed__range_count__max_1000000000000.0__min_0
+ speed__number_cwt_peaks__n_1
+ speed__lempel_ziv_complexity__bins_2
+ speed__permutation_entropy__dimension_6__tau_1
+ speed__permutation_entropy__dimension_5__tau_1
+ speed__permutation_entropy__dimension_7__tau_1
+ speed__number_peaks__n_5
+ speed__approximate_entropy__m_2__r_0.3
+ speed__count_above_mean
+ speed__number_peaks__n_3
+ speed__lempel_ziv_complexity__bins_3
+ speed__approximate_entropy__m_2__r_0.5
+ speed__lempel_ziv_complexity__bins_5
+ speed__cwt_coefficients__coeff_0__w_10__widths_(2, 5, 10, 20)
+ speed__linear_trend__attr_"stderr"
+ speed__cwt_coefficients__coeff_0__w_5__widths_(2, 5, 10, 20)
+ speed__cid_ce__normalize_True
+ speed__agg_linear_trend__attr_"rvalue"__chunk_len_10__f_agg_"min"
+ speed__cwt_coefficients__coeff_1__w_10__widths_(2, 5, 10, 20)
+ speed__index_mass_quantile__q_0.3
+ speed__linear_trend__attr_"slope"
+ speed__index_mass_quantile__q_0.2
+ speed__cwt_coefficients__coeff_1__w_5__widths_(2, 5, 10, 20)
+ speed__lempel_ziv_complexity__bins_100
+ speed__cwt_coefficients__coeff_2__w_10__widths_(2, 5, 10, 20)
+ speed__agg_linear_trend__attr_"slope"__chunk_len_5__f_agg_"min"
+ speed__index_mass_quantile__q_0.4
+ speed__fourier_entropy__bins_2
+ speed__cwt_coefficients__coeff_3__w_10__widths_(2, 5, 10, 20)
+ speed__quantile__q_0.9
+ speed__agg_linear_trend__attr_"slope"__chunk_len_10__f_agg_"min"
+ speed__cwt_coefficients__coeff_2__w_5__widths_(2, 5, 10, 20)
+ speed__agg_autocorrelation__f_agg_"var"__maxlag_40
+ speed__change_quantiles__f_agg_"var"__isabs_True__qh_0.2__ql_0.0
+ speed__change_quantiles__f_agg_"mean"__isabs_True__qh_1.0__ql_0.8
+ speed__permutation_entropy__dimension_3__tau_1
+ speed__cwt_coefficients__coeff_4__w_10__widths_(2, 5, 10, 20)
+ speed__linear_trend__attr_"intercept"
+ speed__linear_trend__attr_"rvalue"
+ speed__agg_autocorrelation__f_agg_"mean"__maxlag_40
+ speed__fourier_entropy__bins_3
+ speed__energy_ratio_by_chunks__num_segments_10__segment_focus_0
+ speed__cwt_coefficients__coeff_3__w_5__widths_(2, 5, 10, 20)
+ speed__change_quantiles__f_agg_"mean"__isabs_True__qh_1.0__ql_0.6
+ speed__mean_change
+ speed__change_quantiles__f_agg_"mean"__isabs_True__qh_0.4__ql_0.2
+ speed__agg_linear_trend__attr_"rvalue"__chunk_len_5__f_agg_"min"
+ speed__root_mean_square
+ speed__change_quantiles__f_agg_"mean"__isabs_True__qh_0.8__ql_0.6
+ speed__fourier_entropy__bins_100
+ speed__change_quantiles__f_agg_"mean"__isabs_True__qh_1.0__ql_0.4
+ speed__fft_aggregated__aggtype_"kurtosis"
+ speed__cwt_coefficients__coeff_4__w_5__widths_(2, 5, 10, 20)
+ speed__last_location_of_maximum
+ speed__mean
+ speed__fourier_entropy__bins_5
+ speed__binned_entropy__max_bins_10
+ arrived_duration
+ client_rate_ride
+ is_comment_x
+ hour
+ traff_jam
+ weekday
+ holiday
+ speed
+ distance_thresh
+ agg_adjs_rate
+ agg_verbs_rate
+ agg_nouns_rate
+ mean_comments_aggressive_rate
+ agg_comm_probability
+ is_comment_y
