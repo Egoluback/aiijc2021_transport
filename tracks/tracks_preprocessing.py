@@ -25,9 +25,8 @@ class Tracks_preprocessing():
         self.X = extracted_features
         self.y = y
 
-    def _extract_features_unlabeled(self, tracks: pd.DataFrame, relevant_features):
-
-        extracted_features = extract_features(tracks,column_id='order_id', column_sort="dt")
+    def _extract_features_unlabeled(self, X_train: pd.DataFrame, relevant_features):
+        extracted_features = extract_features(X_train,column_id='order_id', column_sort="dt")
         extracted_features = extracted_features[relevant_features]
         self.X = extracted_features
 
@@ -55,15 +54,19 @@ class Tracks_preprocessing():
         mxspeed = df.maxspeed.apply(lambda x: int(x) if type(x)==str and x.isdigit() else x)
         df.maxspeed =  mxspeed.apply(lambda x: dic[x.lower()] if type(x)==str else x)
         features=df.copy()
-        features['is_violation'] = np.where(features.speed-features.maxspeed>3, True, False)
-        features['near_violation'] = np.where((features.speed-features.maxspeed)<0.5, True, False)
 
-        groupedby_order= features.groupby('order_id')
+        # if the difference bitween current speed and speed limit is more 20 km/h, it's a violation
+        features['is_violation'] = np.where(features.speed-features.maxspeed>25, True, False)
 
-        count_violations = groupedby_order.apply(lambda x: x.is_violation.sum())
-        count_near_violations = groupedby_order.apply(lambda x: x.near_violation.sum())
+        groupedby_order= features.groupby('order_id',sort=False)
+        violation_sum = groupedby_order.apply(lambda x: x.is_violation.sum())
+        violations_percentage = groupedby_order.apply(lambda x: x.is_violation.sum()/x.size)
 
-        features = pd.DataFrame({'violations':count_violations, 'near_violations': count_near_violations})
+        keys = features['order_id'].unique()
+        features = pd.DataFrame({'violations':violation_sum, 'violations_percentage':violations_percentage})
+        features.index=keys
+        features.to_csv(self.features_path)
+
         return features
 
     def preprocess(self, tracks: pd.DataFrame) -> Tuple[pd.DataFrame, np.array, np.array]:
@@ -79,6 +82,7 @@ class Tracks_preprocessing():
                 features = pd.read_csv(self.features_path)
                 self.X = self.X.merge(features, left_index=True,
                              how='left', right_index=True)
+
                 with open('./log.txt', 'a')as log:
                     log.write('TRACK PREPROCESSING FEATURES')
                     log.write(' '.join([str(column) for column in self.X.columns]))
@@ -115,9 +119,9 @@ class Tracks_preprocessing():
         X_train = tracks.drop(
             ['Unnamed: 0.1', 'driver_id', 'lat_', 'lon_'], axis=1)
         X_train.loc[0, 'speed'] = 0.0
-
+        X_train = X_train.dropna()
         self._extract_features_unlabeled(X_train,relevant_features)
-        self.X.merge(features,left_index=True, how='left', right_index=True)
+        self.X = self.X.merge(features,left_index=True, how='left', right_index=True)
 
         return self.X
 
